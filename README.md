@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # threefish_512 v0.2
 
 * changed cipher name to threefish (only 512 keysize implemented still)
@@ -19,13 +20,22 @@ anything that can use it.
 
 
 # threefish_512 v0.1 features
+=======
+# threefish_512
+>>>>>>> fb277a64455075859443a68f4809904fce254b15
 build it: make
 
 load the module: insmod threefish512.ko
 
+<<<<<<< HEAD
 then create a LUKS container with cryptsetup in ECB, CBC and CTR modes        
 example:           
 cryptsetup luksFormat test -c threefish-ctr-plain64 -s 512
+=======
+then create a LUKS container with cryptsetup in ECB and CTR modes
+example:
+cryptsetup luksFormat test -c threefish512-ctr-plain64 -s 512 -h sha512
+>>>>>>> fb277a64455075859443a68f4809904fce254b15
 
 key size must be 512!
 I only implemented threefish512 since this seems to be the fastest on x86_64
