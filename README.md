@@ -1,7 +1,7 @@
 # threefish_512 v0.2
 
 * changed cipher name to threefish (only 512 keysize implemented still)
-* fixed some a possible big-endian bug. I don't have a BE system to test
+* fixed a possible big-endian bug. I don't have a BE system to test
 
 * Added tweak operating mode.
 THIS IS EXPERIMENTAL, my code is based on kernel-hacking guesswork.
