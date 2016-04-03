@@ -1,8 +1,9 @@
 /*
 	Threefish512 block cipher kernel module.
-	threefish_encrypt_512 / threefish_decrypt_512 are based on 
-	skein hash staging driver.
-	Tweak is hardcoded to 0.
+	v0.2: added tweak operating mode
+	
+	threefish_encrypt_512 / threefish_decrypt_512
+	are based on skein hash staging driver.
 	
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -24,10 +25,10 @@
 #include <linux/errno.h>
 #include <linux/crypto.h>
 #include <linux/bitops.h>
+#include <crypto/algapi.h>
 
 #define  SKEIN_MAX_STATE_WORDS (8)  // orignially was 16, but that's useful only if we implement threefish1024
 #define KeyScheduleConst 0x1BD11BDAA9FC1A22ULL
-#define b64c64(X) le64_to_cpu(X)
 
 struct threefish_key {
 	//u64 state_size;
@@ -41,30 +42,31 @@ static void threefishSetKey512(struct threefish_key* keyCtx, u64* keyData)
     u64 parity = KeyScheduleConst;
 
     for (i = 0; i != (512/64); ++i) {
-        keyCtx->key[i] = b64c64(keyData[i]);
-        parity ^= b64c64(keyData[i]);
+        keyCtx->key[i] = le64_to_cpu(keyData[i]);
+        parity ^= le64_to_cpu(keyData[i]);
     }
     keyCtx->key[i] = parity;
 }
 
-#define t0 0
 #define t1 0
-#define t2 0
+#define t2 t0
+
 void threefish_encrypt_512(const struct threefish_key *key_ctx, const u64 *input,
-			   u64 *output)
+			   u64 *output, u64 t0)
 {
-	u64 b0 = b64c64(input[0]), b1 = b64c64(input[1]),
-	    b2 = b64c64(input[2]), b3 = b64c64(input[3]),
-	    b4 = b64c64(input[4]), b5 = b64c64(input[5]),
-	    b6 = b64c64(input[6]), b7 = b64c64(input[7]);
+	u64 b0 = le64_to_cpu(input[0]), b1 = le64_to_cpu(input[1]),
+	    b2 = le64_to_cpu(input[2]), b3 = le64_to_cpu(input[3]),
+	    b4 = le64_to_cpu(input[4]), b5 = le64_to_cpu(input[5]),
+	    b6 = le64_to_cpu(input[6]), b7 = le64_to_cpu(input[7]);
 	u64 k0 = key_ctx->key[0], k1 = key_ctx->key[1],
 	    k2 = key_ctx->key[2], k3 = key_ctx->key[3],
 	    k4 = key_ctx->key[4], k5 = key_ctx->key[5],
 	    k6 = key_ctx->key[6], k7 = key_ctx->key[7],
 	    k8 = key_ctx->key[8];
+	    
 	//u64 t0 = key_ctx->tweak[0], t1 = key_ctx->tweak[1],
-	//    t2 = key_ctx->tweak[2];
-
+	//    t2 = key_ctx->tweak[2];	
+	
 	b1 += k1;
 	b0 += b1 + k0;
 	b1 = rol64(b1, 46) ^ b0;
@@ -1001,23 +1003,23 @@ void threefish_encrypt_512(const struct threefish_key *key_ctx, const u64 *input
 	b4 += b3;
 	b3 = rol64(b3, 22) ^ b4;
 
-	output[0] = b64c64(b0 + k0);
-	output[1] = b64c64(b1 + k1);
-	output[2] = b64c64(b2 + k2);
-	output[3] = b64c64(b3 + k3);
-	output[4] = b64c64(b4 + k4);
-	output[5] = b64c64(b5 + k5 + t0);
-	output[6] = b64c64(b6 + k6 + t1);
-	output[7] = b64c64(b7 + k7 + 18);
+	output[0] = cpu_to_le64(b0 + k0);
+	output[1] = cpu_to_le64(b1 + k1);
+	output[2] = cpu_to_le64(b2 + k2);
+	output[3] = cpu_to_le64(b3 + k3);
+	output[4] = cpu_to_le64(b4 + k4);
+	output[5] = cpu_to_le64(b5 + k5 + t0);
+	output[6] = cpu_to_le64(b6 + k6 + t1);
+	output[7] = cpu_to_le64(b7 + k7 + 18);
 }
 
 void threefish_decrypt_512(const struct threefish_key *key_ctx, const u64 *input,
-			   u64 *output)
+			   u64 *output, u64 t0)
 {
-	u64 b0 = b64c64(input[0]), b1 = b64c64(input[1]),
-	    b2 = b64c64(input[2]), b3 = b64c64(input[3]),
-	    b4 = b64c64(input[4]), b5 = b64c64(input[5]),
-	    b6 = b64c64(input[6]), b7 = b64c64(input[7]);
+	u64 b0 = le64_to_cpu(input[0]), b1 = le64_to_cpu(input[1]),
+	    b2 = le64_to_cpu(input[2]), b3 = le64_to_cpu(input[3]),
+	    b4 = le64_to_cpu(input[4]), b5 = le64_to_cpu(input[5]),
+	    b6 = le64_to_cpu(input[6]), b7 = le64_to_cpu(input[7]);
 	u64 k0 = key_ctx->key[0], k1 = key_ctx->key[1],
 	    k2 = key_ctx->key[2], k3 = key_ctx->key[3],
 	    k4 = key_ctx->key[4], k5 = key_ctx->key[5],
@@ -2261,66 +2263,164 @@ void threefish_decrypt_512(const struct threefish_key *key_ctx, const u64 *input
 	b0 -= b1 + k0;
 	b1 -= k1;
 
-	output[0] = b64c64(b0);
-	output[1] = b64c64(b1);
-	output[2] = b64c64(b2);
-	output[3] = b64c64(b3);
-
-	output[7] = b64c64(b7);
-	output[6] = b64c64(b6);
-	output[5] = b64c64(b5);
-	output[4] = b64c64(b4);
+	output[0] = cpu_to_le64(b0);
+	output[1] = cpu_to_le64(b1);
+	output[2] = cpu_to_le64(b2);
+	output[3] = cpu_to_le64(b3);
+	output[4] = cpu_to_le64(b4);
+	output[5] = cpu_to_le64(b5);
+	output[6] = cpu_to_le64(b6);
+	output[7] = cpu_to_le64(b7);		
 }
 
-
-#undef t0
 #undef t1
 #undef t2
 
 
+static unsigned int __threefish512_encrypt(struct blkcipher_desc *desc,
+				  struct blkcipher_walk *walk)
+{
+	struct threefish_key *ctx = (struct threefish_key *)crypto_blkcipher_ctx(desc->tfm);
+	unsigned int bsize = 64;
+	unsigned int nbytes = walk->nbytes;
+	u64 *src = (u64 *)walk->src.virt.addr;
+	u64 *dst = (u64 *)walk->dst.virt.addr;
+	u64 tweak = be64_to_cpu(*(u64 *)walk->iv);
+	
+	while (nbytes >= bsize) {
+		threefish_encrypt_512(ctx, src, dst, tweak++);
+		src += 8;
+		dst += 8;
+		nbytes -= bsize;
+	}
+
+	*(u64 *)walk->iv=be64_to_cpu(tweak);
+	return nbytes;
+}
+
+static int cra_threefish512_encrypt(struct blkcipher_desc *desc, struct scatterlist *dst,
+		     struct scatterlist *src, unsigned int nbytes)
+{
+	struct blkcipher_walk walk;
+	int err;
+		
+	blkcipher_walk_init(&walk, dst, src, nbytes);
+	err = blkcipher_walk_virt(desc, &walk);
+		
+	while ((nbytes = walk.nbytes)) {
+		nbytes = __threefish512_encrypt(desc, &walk);
+		err = blkcipher_walk_done(desc, &walk, nbytes);
+	}
+
+	return err;	
+}
+
+static unsigned int __threefish512_decrypt(struct blkcipher_desc *desc,
+				  struct blkcipher_walk *walk)
+{
+	struct threefish_key *ctx = (struct threefish_key *)crypto_blkcipher_ctx(desc->tfm);
+	unsigned int bsize = 64;
+	unsigned int nbytes = walk->nbytes;
+	u64 *src = (u64 *)walk->src.virt.addr;
+	u64 *dst = (u64 *)walk->dst.virt.addr;
+	u64 tweak = be64_to_cpu(*(u64 *)walk->iv);
+	
+	while (nbytes >= bsize) {
+		threefish_decrypt_512(ctx, src, dst, tweak++);
+		src += 8;
+		dst += 8;
+		nbytes -= bsize;
+	}
+
+	*(u64 *)walk->iv=be64_to_cpu(tweak);
+	return nbytes;
+}
+
+static int cra_threefish512_decrypt(struct blkcipher_desc *desc, struct scatterlist *dst,
+		     struct scatterlist *src, unsigned int nbytes)
+{
+	struct blkcipher_walk walk;
+	int err;
+		
+	blkcipher_walk_init(&walk, dst, src, nbytes);
+	err = blkcipher_walk_virt(desc, &walk);
+		
+	while ((nbytes = walk.nbytes)) {
+		nbytes = __threefish512_decrypt(desc, &walk);
+		err = blkcipher_walk_done(desc, &walk, nbytes);
+	}
+
+	return err;	
+}
+
 /* Encrypt one block.  in and out may be the same. */
 static void cia_threefish512_encrypt(struct crypto_tfm *tfm, u8 *out, const u8 *in)
 {
-	threefish_encrypt_512((const struct threefish_key*)crypto_tfm_ctx(tfm), (const u64*)in, (u64*)out);
+	threefish_encrypt_512((const struct threefish_key*)crypto_tfm_ctx(tfm), (const u64*)in, (u64*)out, 0);
 }
 
 /* Decrypt one block.  in and out may be the same. */
 static void cia_threefish512_decrypt(struct crypto_tfm *tfm, u8 *out, const u8 *in)
 {
-	threefish_decrypt_512((const struct threefish_key*)crypto_tfm_ctx(tfm), (const u64*)in, (u64*)out);
+	threefish_decrypt_512((const struct threefish_key*)crypto_tfm_ctx(tfm), (const u64*)in, (u64*)out, 0);
 }
 
-int cia_threefish512_setkey(struct crypto_tfm *tfm, const u8 *key, unsigned int key_len)
+
+static int cia_threefish512_setkey(struct crypto_tfm *tfm, const u8 *key, unsigned int key_len)
 {
 	threefishSetKey512((struct threefish_key*)crypto_tfm_ctx(tfm),(u64*)key);
 	return 0;
 }
 
-static struct crypto_alg alg = {
-	.cra_name           =   "threefish512",
+static struct crypto_alg threefish_algs[] = { {
+.cra_name		= "tweak(threefish)",
+	.cra_driver_name	= "threefish512-generic",
+	.cra_priority		= 200,
+	.cra_flags		= CRYPTO_ALG_TYPE_BLKCIPHER,
+	.cra_blocksize		= 64,
+	.cra_ctxsize		= sizeof(struct threefish_key),
+	.cra_alignmask		= 0,
+	.cra_type		= &crypto_blkcipher_type,
+	.cra_module		= THIS_MODULE,
+	.cra_u = { 
+		.blkcipher = {
+			.min_keysize	= 64,
+			.max_keysize	= 64,
+			.ivsize		= 8,
+			.setkey		= cia_threefish512_setkey,
+			.encrypt	= cra_threefish512_encrypt,
+			.decrypt	= cra_threefish512_decrypt,
+		}
+	}
+}, {
+	.cra_name           =   "threefish",
 	.cra_driver_name    =   "threefish512-generic",
 	.cra_priority       =   100,
 	.cra_flags          =   CRYPTO_ALG_TYPE_CIPHER,
 	.cra_blocksize      =   64,
 	.cra_ctxsize        =   sizeof(struct threefish_key),
-	.cra_alignmask      =	3,
+	.cra_alignmask      =	0,
 	.cra_module         =   THIS_MODULE,
-	.cra_u              =   { .cipher = {
-	.cia_min_keysize    =   64,
-	.cia_max_keysize    =   64,
-	.cia_setkey         =   cia_threefish512_setkey,
-	.cia_encrypt        =   cia_threefish512_encrypt,
-	.cia_decrypt        =   cia_threefish512_decrypt } }
-};
+	.cra_u              =   { 
+		.cipher = {
+			.cia_min_keysize    =   64,
+			.cia_max_keysize    =   64,
+			.cia_setkey         =   cia_threefish512_setkey,
+			.cia_encrypt        =   cia_threefish512_encrypt,
+			.cia_decrypt        =   cia_threefish512_decrypt 
+			}
+	}
+} };
+
 
 static int __init threefish_mod_init(void)
 {
-	return crypto_register_alg(&alg);
+	return crypto_register_algs(threefish_algs, ARRAY_SIZE(threefish_algs));
 }
 
 static void __exit threefish_mod_fini(void)
 {
-	crypto_unregister_alg(&alg);
+	crypto_unregister_algs(threefish_algs, ARRAY_SIZE(threefish_algs));
 }
 
 module_init(threefish_mod_init);
