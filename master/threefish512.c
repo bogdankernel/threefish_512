@@ -2294,7 +2294,7 @@ static unsigned int __threefish512_encrypt(struct blkcipher_desc *desc,
 		nbytes -= bsize;
 	}
 
-	*(u64 *)walk->iv=be64_to_cpu(tweak);
+	*(u64 *)walk->iv=cpu_to_be64(tweak);
 	return nbytes;
 }
 
@@ -2332,7 +2332,7 @@ static unsigned int __threefish512_decrypt(struct blkcipher_desc *desc,
 		nbytes -= bsize;
 	}
 
-	*(u64 *)walk->iv=be64_to_cpu(tweak);
+	*(u64 *)walk->iv=cpu_to_be64(tweak);
 	return nbytes;
 }
 
